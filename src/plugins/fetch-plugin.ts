@@ -7,51 +7,62 @@ const fileCache = localForage.createInstance({
 });
 
 export const fetchPlugin = (inputCode: string) => {
-  return {
-    name: 'fetch-plugin',
-    setup(build: esbuild.PluginBuild) {
-    build.onLoad({ filter: /.*/ }, async (args: any) => {
-      if (args.path === 'index.js') {
-        return {
-          loader: 'jsx',
-          contents: inputCode
-        };
-      }
+	return {
+		name: 'fetch-plugin',
+		setup(build: esbuild.PluginBuild) {
+			build.onLoad({ filter: /(^index\.js$)/ }, () => {
+				return {
+					loader: 'jsx',
+					contents: inputCode
+				};
+			});
 
+    build.onLoad({ filter: /.*/ }, async (args: any) =>  {
       // check to see if we already fetched file
-      // check if in cache
-      // const cachedResult = await fileCache.getItem<esbuild.OnLoadResult>(args.path);
+				// check if in cache
+				const cachedResult = await fileCache.getItem<esbuild.OnLoadResult>(args.path);
 
-      // if in cache, return it immediately
-      // if (cachedResult) return cachedResult;
+				// if in cache, return it immediately
+				if (cachedResult) return cachedResult;
+    })
 
-      const { data, request } = await axios.get(args.path);
+			build.onLoad({ filter: /.css$/ }, async (args: any) => {
+				const { data, request } = await axios.get(args.path);
 
-      const fileType = args.path.match(/.css$/) ? 'css'  : 'jsx';
+				// * remove new line characters, double & single quotes
+				const escaped = data.replace(/\n/g, '').replace(/"/g, '\\"').replace(/'/g, "\\'");
 
-      // * remove new line characters, double & single quotes
-      const escaped = data
-        .replace(/\n/g, '')
-        .replace(/"/g, '\\"')
-        .replace(/'/g, "\\'");
-
-      const contents = fileType === 'css' ? 
-      `
+				const contents = `
         const style = document.createElement('styel');
         style.innerText = '${escaped}';
         document.head.appendChild(style)
-      ` : data;
+      `;
 
-      const result: esbuild.OnLoadResult = {
-        loader: 'jsx',
-        contents,
-        resolveDir: new URL('./', request.responseURL).pathname
-      };
-      // store response in cache
-      await fileCache.setItem(args.path, result);
+				const result: esbuild.OnLoadResult = {
+					loader: 'jsx',
+					contents,
+					resolveDir: new URL('./', request.responseURL).pathname
+				};
+				// store response in cache
+				await fileCache.setItem(args.path, result);
 
-      return result;
-    });
-    }
-  }
-}
+				return result;
+			});
+
+			build.onLoad({ filter: /.*/ }, async (args: any) => {
+
+				const { data, request } = await axios.get(args.path);
+
+				const result: esbuild.OnLoadResult = {
+					loader: 'jsx',
+					contents: data,
+					resolveDir: new URL('./', request.responseURL).pathname
+				};
+				// store response in cache
+				await fileCache.setItem(args.path, result);
+
+				return result;
+			});
+		}
+	};
+};
