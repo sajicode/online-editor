@@ -20,15 +20,31 @@ export const fetchPlugin = (inputCode: string) => {
 
       // check to see if we already fetched file
       // check if in cache
-      const cachedResult = await fileCache.getItem<esbuild.OnLoadResult>(args.path);
+      // const cachedResult = await fileCache.getItem<esbuild.OnLoadResult>(args.path);
 
       // if in cache, return it immediately
-      if (cachedResult) return cachedResult;
+      // if (cachedResult) return cachedResult;
 
       const { data, request } = await axios.get(args.path);
+
+      const fileType = args.path.match(/.css$/) ? 'css'  : 'jsx';
+
+      // * remove new line characters, double & single quotes
+      const escaped = data
+        .replace(/\n/g, '')
+        .replace(/"/g, '\\"')
+        .replace(/'/g, "\\'");
+
+      const contents = fileType === 'css' ? 
+      `
+        const style = document.createElement('styel');
+        style.innerText = '${escaped}';
+        document.head.appendChild(style)
+      ` : data;
+
       const result: esbuild.OnLoadResult = {
         loader: 'jsx',
-        contents: data,
+        contents,
         resolveDir: new URL('./', request.responseURL).pathname
       };
       // store response in cache
